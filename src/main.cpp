@@ -220,7 +220,7 @@ bool handleEvent(Application &app)
     return true;
 }
 
-int main(int argc, char **argv)
+int main()
 {
     SDL_Window *gWindow;
     SDL_Renderer *renderer;

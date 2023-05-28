@@ -34,6 +34,7 @@ SDL_Window* init(string windowTitle, int width, int height)
 SDL_Window* init(string windowTitle)
 {
     init(windowTitle, DEFAULT_SCREEN_HEIGHT, DEFAULT_SCREEN_WIDTH);
+    return NULL;
 }
 
 SDL_Surface* loadMedia(string path)

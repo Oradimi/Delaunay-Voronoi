@@ -9,6 +9,7 @@ add_executable(${PROJECT_NAME})
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 ## SDL
+message(${CMAKE_SIZEOF_VOID_P})
 if (EXISTS "${CMAKE_SOURCE_DIR}/SDL2")
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         # 64 bits
@@ -57,7 +58,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_EXTENSIONS OFF)
 file(GLOB_RECURSE SOURCES_FILES CONFIGURE_DEPENDS src/*)
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCES_FILES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES})
+message("SDL2" ${SDL2_LIBRARIES} ${SDL2_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_LIBRARIES} -lSDL2)
 
 
 # Tell Cmake where to look for header files (use the same src folder)
