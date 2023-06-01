@@ -5,6 +5,7 @@
 #include <map>
 #include <queue>
 #include <algorithm>
+#include <iostream>
 
 #define EPSILON 0.0001f
 
@@ -21,12 +22,22 @@ struct Coords
 struct Segment
 {
     Coords p1, p2;
+
+    bool operator==(const Segment& other)
+    {
+        return p1 == other.p1 and p2 == other.p2;
+    }
 };
 
 struct Triangle
 {
     Coords p1, p2, p3;
     bool complet=false;
+
+    bool operator==(const Triangle& other)
+    {
+        return p1 == other.p1 and p2 == other.p2 and p3 == other.p3;
+    }
 };
 
 struct Application
@@ -157,12 +168,79 @@ bool CircumCircle(
 
 void construitDelaunay(Application &app)
 {
-    
+    std::vector<Segment> segments;
+    // Tri des points selon leurs coordonnées croissantes
+    std::sort(app.points.begin(), app.points.end(), compareCoords);
+
+    app.triangles.clear();
+
+    Coords point1{-1000, -1000};
+    Coords point2{500, 3000};
+    Coords point3{1500, -1000};
+    Triangle frame_triangle{point1, point2, point3};
+    app.triangles.push_back(frame_triangle);
+
+    for (Coords& p: app.points) {
+        
+        std::vector<Triangle*> tri_to_remove;
+        std::vector<Segment*> seg_to_remove;
+
+        for (Triangle& t: app.triangles) {
+            
+            float xc;
+            float yc;
+            float rsqr;
+            if (CircumCircle(p.x, p.y,
+                t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
+                &xc, &yc, &rsqr)
+            ) {
+                Segment segment1{t.p1, t.p2};
+                Segment segment2{t.p2, t.p3};
+                Segment segment3{t.p3, t.p1};
+                segments.push_back(segment1);
+                segments.push_back(segment2);
+                segments.push_back(segment3);
+                tri_to_remove.push_back(&t);
+            }
+        }
+
+        std::cout << "Triangle size AVANT: " << app.triangles.size() << std::endl;
+        for(auto& elem: tri_to_remove) {
+            auto to_delete = std::remove(app.triangles.begin(), app.triangles.end(), *elem);
+            app.triangles.erase(to_delete, app.triangles.end());
+        }
+        std::cout << "Triangle size APRES: " << app.triangles.size() << std::endl;
+
+        for (int i = 0; i < (int)segments.size(); i++) {
+            for (int j = i + 1; j < (int)segments.size(); j++) {
+                if ((segments[i].p1 == segments[j].p2) && (segments[i].p2 == segments[j].p1)) {
+                    std::cout << "i: " << i << std::endl;
+                    std::cout << "j: " << j << std::endl;
+                    seg_to_remove.push_back(&segments[i]);
+                    seg_to_remove.push_back(&segments[j]);
+                }
+            }
+        }
+
+        std::cout << "Segment size AVANT: " << segments.size() << std::endl;
+        for(auto& elem: seg_to_remove) {
+            auto to_delete = std::remove(segments.begin(), segments.end(), *elem);
+            segments.erase(to_delete, segments.end());
+        }
+        std::cout << "Segment size APRES: " << segments.size() << std::endl;
+
+        for (Segment& s: segments) {
+            Triangle triangle{s.p1, s.p2, p};
+            app.triangles.push_back(triangle);
+        }
+    }
+    std::cout << "Triangle size FINAL: " << app.triangles.size() << std::endl;
+    std::cout << "Segment size FINAL: " << segments.size() << std::endl;
 }
 
 void construitVoronoi(Application &app)
 {
-        app.triangles.clear();
+    app.triangles.clear();
 
     // Tri des points selon leurs coordonnées y croissantes
     std::sort(app.points.begin(), app.points.end(), compareCoords);
@@ -213,7 +291,7 @@ bool handleEvent(Application &app)
             {
                 app.focus.y = 0;
                 app.points.push_back(Coords{e.button.x, e.button.y});
-                construitVoronoi(app);
+                construitDelaunay(app);
             }
         }
     }
