@@ -17,6 +17,10 @@ struct Coords
     {
         return x == other.x and y == other.y;
     }
+    bool operator!=(const Coords& other)
+    {
+        return x != other.x or y != other.y;
+    }
 };
 
 struct Segment
@@ -25,13 +29,20 @@ struct Segment
 
     bool operator==(const Segment& other)
     {
-        return p1 == other.p1 and p2 == other.p2;
+        return p1 == other.p1 and p2 == other.p2
+        and p1 == other.p2 and p2 == other.p1;
+    }
+    bool operator!=(const Segment& other)
+    {
+        return p1 != other.p1 or p2 != other.p2
+        or p1 != other.p2 or p2 != other.p1;
     }
 };
 
 struct Triangle
 {
     Coords p1, p2, p3;
+    Segment s1{p1, p2}, s2{p2, p3}, s3{p3, p1};
     bool complet=false;
 
     bool operator==(const Triangle& other)
@@ -51,9 +62,9 @@ struct Application
 
 bool compareCoords(Coords point1, Coords point2)
 {
-    if (point1.y == point2.y)
-        return point1.x < point2.x;
-    return point1.y < point2.y;
+    if (point1.x == point2.x)
+        return point1.y < point2.y;
+    return point1.x < point2.x;
 }
 
 void drawPoints(SDL_Renderer *renderer, const std::vector<Coords> &points)
@@ -166,76 +177,86 @@ bool CircumCircle(
     return ((drsqr - *rsqr) <= EPSILON ? true : false);
 }
 
-void construitDelaunay(Application &app)
-{
-    std::vector<Segment> segments;
-    // Tri des points selon leurs coordonnées croissantes
+void construitDelaunay(Application &app) {
     std::sort(app.points.begin(), app.points.end(), compareCoords);
-
     app.triangles.clear();
-
-    Coords point1{-1000, -1000};
-    Coords point2{500, 3000};
-    Coords point3{1500, -1000};
-    Triangle frame_triangle{point1, point2, point3};
-    app.triangles.push_back(frame_triangle);
-
+    app.triangles.push_back({{-1000, -1000}, {500, 3000}, {1500, -1000}});
+    // app.triangles.front().makeLimite();
     for (Coords& p: app.points) {
+        std::vector<Segment> segments;
+        std::vector<Segment*> bad_segments;
+        std::vector<Triangle*> bad_triangles;
         
-        std::vector<Triangle*> tri_to_remove;
-        std::vector<Segment*> seg_to_remove;
-
         for (Triangle& t: app.triangles) {
-            
-            float xc;
-            float yc;
-            float rsqr;
-            if (CircumCircle(p.x, p.y,
-                t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
-                &xc, &yc, &rsqr)
-            ) {
-                Segment segment1{t.p1, t.p2};
-                Segment segment2{t.p2, t.p3};
-                Segment segment3{t.p3, t.p1};
-                segments.push_back(segment1);
-                segments.push_back(segment2);
-                segments.push_back(segment3);
-                tri_to_remove.push_back(&t);
+            float xc, yc, rsqr;
+            Triangle* tri = &t;
+            bool inCircle = CircumCircle(p.x, p.y,
+                    t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
+                    &xc, &yc, &rsqr);
+            if (inCircle) {
+                segments.push_back(Segment{t.p1, t.p2});
+                segments.push_back(Segment{t.p2, t.p3});
+                segments.push_back(Segment{t.p3, t.p1});
+                bad_triangles.push_back(tri);
             }
+            
         }
 
-        std::cout << "Triangle size AVANT: " << app.triangles.size() << std::endl;
-        for(auto& elem: tri_to_remove) {
-            auto to_delete = std::remove(app.triangles.begin(), app.triangles.end(), *elem);
-            app.triangles.erase(to_delete, app.triangles.end());
-        }
-        std::cout << "Triangle size APRES: " << app.triangles.size() << std::endl;
+        /*for (Triangle* bt1: bad_triangles) {
+            for (Triangle* bt2: bad_triangles) {
+                if (&bt1 == &bt2) continue;
+                std::cout << "wooo!" << std::endl;
+                if (bt1->s1 != bt2->s1
+                 && bt1->s1 != bt2->s2
+                 && bt1->s1 != bt2->s3) {
+                    std::cout << "hey!" << std::endl;
+                    segments.push_back(bt1->s1);
+                }
+                if (bt1->s2 != bt2->s1
+                 && bt1->s2 != bt2->s2
+                 && bt1->s2 != bt2->s3) {
+                    std::cout << "hey!" << std::endl;
+                    segments.push_back(bt1->s2);
+                }
+                if (bt1->s3 != bt2->s1
+                 && bt1->s3 != bt2->s2
+                 && bt1->s3 != bt2->s3) {
+                    std::cout << "hey!" << std::endl;
+                    segments.push_back(bt1->s3);
+                }
 
-        for (int i = 0; i < (int)segments.size(); i++) {
-            for (int j = i + 1; j < (int)segments.size(); j++) {
-                if ((segments[i].p1 == segments[j].p2) && (segments[i].p2 == segments[j].p1)) {
-                    std::cout << "i: " << i << std::endl;
-                    std::cout << "j: " << j << std::endl;
-                    seg_to_remove.push_back(&segments[i]);
-                    seg_to_remove.push_back(&segments[j]);
+            }
+        }*/
+
+        for (Segment& s1: segments) {
+            for (Segment& s2: segments) {
+                if (&s1 == &s2) continue;
+                if (s1.p1 == s2.p2 && s1.p2 == s2.p1) {
+                    Segment* seg1 = &s1;
+                    Segment* seg2 = &s2;
+                    bad_segments.push_back(seg1);
+                    bad_segments.push_back(seg2);
                 }
             }
         }
+        /*std::cout << "bad_segments AVANT: " << bad_segments.size() << std::endl;
+        bad_segments.erase(unique(bad_segments.begin(), bad_segments.end()), bad_segments.end());
+        std::cout << "bad_segments APRES: " << bad_segments.size() << std::endl;*/
 
-        std::cout << "Segment size AVANT: " << segments.size() << std::endl;
-        for(auto& elem: seg_to_remove) {
+        for (Triangle* bt: bad_triangles) {
+            auto to_delete = std::remove(app.triangles.begin(), app.triangles.end(), *bt);
+            app.triangles.erase(to_delete, app.triangles.end());
+        }
+
+        /*for (Segment* elem: bad_segments) {
             auto to_delete = std::remove(segments.begin(), segments.end(), *elem);
             segments.erase(to_delete, segments.end());
-        }
-        std::cout << "Segment size APRES: " << segments.size() << std::endl;
+        }*/
 
         for (Segment& s: segments) {
-            Triangle triangle{s.p1, s.p2, p};
-            app.triangles.push_back(triangle);
+            app.triangles.push_back(Triangle {s.p1, s.p2, p});
         }
     }
-    std::cout << "Triangle size FINAL: " << app.triangles.size() << std::endl;
-    std::cout << "Segment size FINAL: " << segments.size() << std::endl;
 }
 
 void construitVoronoi(Application &app)
