@@ -42,6 +42,7 @@ struct Segment
 struct Triangle
 {
     Coords p1, p2, p3;
+    Segment s1{p1, p2}, s2{p2, p3}, s3{p3, p1};
     Coords center;
     float radius;
     bool complet=false;
@@ -198,9 +199,9 @@ void construitDelaunay(Application &app) {
             t.center = Coords{(int)xc, (int)yc};
             t.radius = rsqr;
             if (inCircle) {
-                segments.push_back(Segment{t.p1, t.p2});
-                segments.push_back(Segment{t.p2, t.p3});
-                segments.push_back(Segment{t.p3, t.p1});
+                segments.push_back(t.s1);
+                segments.push_back(t.s2);
+                segments.push_back(t.s3);
                 bad_triangles.push_back(t);
             }
         }
@@ -233,6 +234,43 @@ void construitVoronoi(Application &app)
 {
     construitDelaunay(app);
 
+    std::vector<Triangle> delaunay_tri = app.triangles;
+
+    app.segments.clear();
+    std::vector<Coords> points;
+        std::vector<int> point_counts;
+    for (Coords& p: app.points) {
+        std::vector<Triangle> good_triangles;
+        float xc, yc, rsqr;
+        for (Triangle t: delaunay_tri) {
+            bool inCircle = CircumCircle(p.x, p.y,
+                    t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
+                    &xc, &yc, &rsqr);
+            t.center = Coords{(int)xc, (int)yc};
+            t.radius = rsqr;
+            if (p == t.p1 || p == t.p2 || p == t.p3) {
+                good_triangles.push_back(t);
+            }
+        }
+
+        for (int i = 0; i < (int)good_triangles.size(); i++) {
+            for (int j = i + 1; j < (int)good_triangles.size(); j++) {
+                bool hasSegmentInCommon = good_triangles[i].s1 == good_triangles[j].s1 ||
+                    good_triangles[i].s1 == good_triangles[j].s2 ||
+                    good_triangles[i].s1 == good_triangles[j].s3 ||
+                    good_triangles[i].s2 == good_triangles[j].s1 ||
+                    good_triangles[i].s2 == good_triangles[j].s2 ||
+                    good_triangles[i].s2 == good_triangles[j].s3 ||
+                    good_triangles[i].s3 == good_triangles[j].s1 ||
+                    good_triangles[i].s3 == good_triangles[j].s2 ||
+                    good_triangles[i].s3 == good_triangles[j].s3;
+                if (hasSegmentInCommon) {
+                    app.segments.push_back(Segment {good_triangles[i].center, good_triangles[j].center});
+                }
+            }
+        }
+    }
+
     std::vector<Triangle> bad_triangles;
 
     for (Triangle t: app.triangles) {
@@ -253,32 +291,6 @@ void construitVoronoi(Application &app)
     for (Triangle bt: bad_triangles) {
         auto to_delete = std::remove(app.triangles.begin(), app.triangles.end(), bt);
         app.triangles.erase(to_delete, app.triangles.end());
-    }
-
-    std::vector<Triangle> delaunay_tri = app.triangles;
-
-    app.segments.clear();
-    std::cout << "------------------------" << std::endl;
-    for (Coords& p: app.points) {
-        std::vector<Triangle> good_triangles;
-        float xc, yc, rsqr;
-        for (Triangle t: delaunay_tri) {
-            bool inCircle = CircumCircle(p.x, p.y,
-                    t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
-                    &xc, &yc, &rsqr);
-            t.center = Coords{(int)xc, (int)yc};
-            t.radius = rsqr;
-            if (p == t.p1 || p == t.p2 || p == t.p3) {
-                good_triangles.push_back(t);
-            }
-        }
-        std::cout << "New soup!" << std::endl;
-        for (int i = 0; i < (int)good_triangles.size(); i++) {
-            std::cout << good_triangles[i].center.x << std::endl;
-        }
-        for (int i = 0; i < (int)good_triangles.size() - 1; i++) {
-            app.segments.push_back(Segment {good_triangles[i].center, good_triangles[i + 1].center});
-        }
     }
 }
 
@@ -309,13 +321,7 @@ bool handleEvent(Application &app)
             else if (e.button.button == SDL_BUTTON_LEFT)
             {
                 app.focus.y = 0;
-                // app.points.push_back(Coords{e.button.x, e.button.y});
-                app.points.push_back(Coords{200, 300});
-                app.points.push_back(Coords{520, 300});
-                app.points.push_back(Coords{359, 200});
-                app.points.push_back(Coords{360, 450});
-                app.points.push_back(Coords{361, 500});
-                app.points.push_back(Coords{362, 550});
+                app.points.push_back(Coords{e.button.x, e.button.y});
                 construitVoronoi(app);
             }
         }
