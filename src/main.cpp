@@ -42,7 +42,8 @@ struct Segment
 struct Triangle
 {
     Coords p1, p2, p3;
-    Segment s1{p1, p2}, s2{p2, p3}, s3{p3, p1};
+    Coords center;
+    float radius;
     bool complet=false;
 
     bool operator==(const Triangle& other)
@@ -57,6 +58,7 @@ struct Application
     Coords focus{100, 100};
 
     std::vector<Coords> points;
+    std::vector<Segment> segments;
     std::vector<Triangle> triangles;
 };
 
@@ -109,6 +111,7 @@ void draw(SDL_Renderer *renderer, const Application &app)
     SDL_GetRendererOutputSize(renderer, &width, &height);
 
     drawPoints(renderer, app.points);
+    drawSegments(renderer, app.segments);
     drawTriangles(renderer, app.triangles);
 }
 
@@ -192,6 +195,8 @@ void construitDelaunay(Application &app) {
             bool inCircle = CircumCircle(p.x, p.y,
                     t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
                     &xc, &yc, &rsqr);
+            t.center = Coords{(int)xc, (int)yc};
+            t.radius = rsqr;
             if (inCircle) {
                 segments.push_back(Segment{t.p1, t.p2});
                 segments.push_back(Segment{t.p2, t.p3});
@@ -226,48 +231,53 @@ void construitDelaunay(Application &app) {
 
 void construitVoronoi(Application &app)
 {
-    std::sort(app.points.begin(), app.points.end(), compareCoords);
-    app.triangles.clear();
-    app.triangles.push_back({{-1000, -1000}, {500, 3000}, {1500, -1000}});
+    construitDelaunay(app);
 
+    std::vector<Triangle> bad_triangles;
+
+    for (Triangle t: app.triangles) {
+        bool hasCommonPointsWithSuperTriangle = t.p1 == Coords{-1000, -1000} ||
+                t.p1 == Coords{500, 3000} ||
+                t.p1 == Coords{1500, -1000} ||
+                t.p2 == Coords{-1000, -1000} ||
+                t.p2 == Coords{500, 3000} ||
+                t.p2 == Coords{1500, -1000} ||
+                t.p3 == Coords{-1000, -1000} ||
+                t.p3 == Coords{500, 3000} ||
+                t.p3 == Coords{1500, -1000};
+        if (hasCommonPointsWithSuperTriangle) {
+            bad_triangles.push_back(t);
+        }
+    }
+
+    for (Triangle bt: bad_triangles) {
+        auto to_delete = std::remove(app.triangles.begin(), app.triangles.end(), bt);
+        app.triangles.erase(to_delete, app.triangles.end());
+    }
+
+    std::vector<Triangle> delaunay_tri = app.triangles;
+
+    app.segments.clear();
+    std::cout << "------------------------" << std::endl;
     for (Coords& p: app.points) {
-        std::vector<Segment> segments;
-        std::vector<Segment> bad_segments;
-        std::vector<Triangle> bad_triangles;
-        
+        std::vector<Triangle> good_triangles;
         float xc, yc, rsqr;
-        for (Triangle& t: app.triangles) {
+        for (Triangle t: delaunay_tri) {
             bool inCircle = CircumCircle(p.x, p.y,
                     t.p1.x, t.p1.y, t.p2.x, t.p2.y, t.p3.x, t.p3.y,
                     &xc, &yc, &rsqr);
-            if (inCircle) {
-                segments.push_back(Segment{t.p1, t.p2});
-                segments.push_back(Segment{t.p2, t.p3});
-                segments.push_back(Segment{t.p3, t.p1});
-                bad_triangles.push_back(t);
+            t.center = Coords{(int)xc, (int)yc};
+            t.radius = rsqr;
+            if (p == t.p1 || p == t.p2 || p == t.p3) {
+                good_triangles.push_back(t);
             }
         }
-
-        for (unsigned int i = 0; i < segments.size(); i++) {
-            for (unsigned int j = i + 1; j < segments.size(); j++) {
-                if (segments[i] == segments[j]) {
-                    bad_segments.push_back(segments[i]);
-                }
-            }
+        std::cout << "New soup!" << std::endl;
+        for (int i = 0; i < (int)good_triangles.size(); i++) {
+            std::cout << good_triangles[i].center.x << std::endl;
         }
-
-        for (Triangle bt: bad_triangles) {
-            auto to_delete = std::remove(app.triangles.begin(), app.triangles.end(), bt);
-            app.triangles.erase(to_delete, app.triangles.end());
-        }
-
-        for (Segment bs: bad_segments) {
-            auto to_delete = std::remove(segments.begin(), segments.end(), bs);
-            segments.erase(to_delete, segments.end());
-        }
-
-        for (Segment s: segments) {
-            app.triangles.push_back(Triangle {s.p1, s.p2, p});
+        for (int i = 0; i < (int)good_triangles.size() - 1; i++) {
+            app.segments.push_back(Segment {good_triangles[i].center, good_triangles[i + 1].center});
         }
     }
 }
@@ -299,8 +309,14 @@ bool handleEvent(Application &app)
             else if (e.button.button == SDL_BUTTON_LEFT)
             {
                 app.focus.y = 0;
-                app.points.push_back(Coords{e.button.x, e.button.y});
-                construitDelaunay(app);
+                // app.points.push_back(Coords{e.button.x, e.button.y});
+                app.points.push_back(Coords{200, 300});
+                app.points.push_back(Coords{520, 300});
+                app.points.push_back(Coords{359, 200});
+                app.points.push_back(Coords{360, 450});
+                app.points.push_back(Coords{361, 500});
+                app.points.push_back(Coords{362, 550});
+                construitVoronoi(app);
             }
         }
     }
